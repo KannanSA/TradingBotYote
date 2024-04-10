@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading</title>
+    <!-- Include Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        #header {
+            width: 100%;
+            background-color: #333;
+            color: #fff;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        #header h1 {
+            margin: 0;
+            padding: 0;
+        }
+
+        #logout-btn {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #login-btn {
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #logout-btn:hover, #login-btn:hover {
+            opacity: 0.8;
+        }
+
+        #graph {
+            width: 80%;
+            height: 400px;
+            margin-top: 60px; /* Adjusted to accommodate the header */
+            margin-bottom: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        p {
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        #data-table {
+            width: 80%;
+            margin-bottom: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #data-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #data-table th, #data-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #data-table th {
+            background-color: #f2f2f2;
+        }
+
+        #next-price {
+            color: #007bff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>Trading Dashboard</h1>
+        {% if logged_in %}
+            <button id="logout-btn" onclick="logout()">Logout</button>
+        {% else %}
+            <button id="login-btn" onclick="login()">Login</button>
+        {% endif %}
+    </div>
+
+    <h2>Live Ethereum Price</h2>
+    <p>Predicted next price: <span id="next-price">${{ lastPrediction }}</span></p>
+    <!-- <p>Predicted next price: <span id="next-price">${{ initialPredictions }}</span></p> -->
+    <script>
+        // Function to update the LSTM output graph and the last predicted price
+    function updateLSTMGraphAndPrice(predictions) {
+    // Update the LSTM output graph
+    updateLSTMGraph(predictions);
+    // Update the last predicted price
+    var lastPrediction = predictions[predictions.length - 1];
+    document.getElementById('next-price').innerText = '$' + lastPrediction.toFixed(2); // Assuming the prediction is a numeric value
+}
+
+    // Function to fetch new LSTM predictions and update the graph
+    function fetchAndUpdateLSTMGraph() {
+    fetch('/get-predictions')
+        .then(response => response.json())
+        .then(data => {
+            var newPredictions = data.predictions;
+            updateLSTMGraphAndPrice(newPredictions);
+        })
+        .catch(error => console.error('Error fetching LSTM predictions:', error));
+}
+
+    // Call the function to fetch new LSTM predictions and update the graph every second
+    setInterval(fetchAndUpdateLSTMGraph, 1000);  // Change the interval as needed
+    </script>
+    
+    <div id="graph"></div>
+
+    <!-- LSTM Output Graph -->
+    <h3>LSTM Output Graph</h3>
+    <div id="lstm-graph"></div>
+
+    <button onclick="manualBuy()">Manual Buy</button>
+    <button onclick="manualSell()">Manual Sell</button>
+
+    <p>Ethereum Data:</p>
+    <div id="data-table">{{ eth_data | safe }}</div>
+    <p>Predicted next price: <span id="next-price">${{ lastPrediction }}</span></p>
+
+    <script>
+        // Function to handle login
+        function login() {
+            window.location.href = "/login";
+        }
+
+        // Function to handle logout
+        function logout() {
+            window.location.href = "/logout";
+        }
+
+        // Function to update the graph
+        function updateGraph(newData) {
+            // Update the graph with new data
+            Plotly.extendTraces('graph', {
+                y: [[newData]]
+            }, [0]);
+        }
+
+        // Initial data for the graph
+        var data = [{
+            y: [],  // Initial empty data
+            mode: 'lines',
+            line: {color: 'blue'}
+        }];
+
+        // Layout options for the graph
+        var layout = {
+            title: 'Live Ethereum Price',
+            xaxis: {
+                title: 'Time'
+            },
+            yaxis: {
+                title: 'Price'
+            }
+        };
+
+        // Plot the graph
+        Plotly.newPlot('graph', data, layout);
+
+        // Function to fetch new data and update the graph
+        function fetchDataAndUpdateGraph() {
+            // Make an AJAX request to fetch new data
+            fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT')  // Example endpoint, replace it with your actual endpoint
+                .then(response => response.json())
+                .then(data => {
+                    // Extract the price data
+                    var newPrice = parseFloat(data.price);
+                    // Update the graph with new data
+                    updateGraph(newPrice);
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+        // Call the function to fetch data and update the graph every 5 seconds
+        setInterval(fetchDataAndUpdateGraph, 5000);  // Change the interval as needed
+
+        // Function to update the LSTM output graph
+        function updateLSTMGraph(predictions) {
+            // Plot the LSTM output graph
+            Plotly.newPlot('lstm-graph', [{
+                x: predictions.map((_, i) => i),
+                y: predictions,
+                mode: 'lines',
+                line: {color: 'green'}
+            }]);
+        }
+
+        // Function to fetch new LSTM predictions and update the graph
+        function fetchAndUpdateLSTMGraph() {
+            fetch('/get-predictions')
+                .then(response => response.json())
+                .then(data => {
+                    var newPredictions = data.predictions;
+                    updateLSTMGraph(newPredictions);
+                })
+                .catch(error => console.error('Error fetching LSTM predictions:', error));
+        }
+
+        // Call the function to fetch new LSTM predictions and update the graph every second
+        setInterval(fetchAndUpdateLSTMGraph, 1000);  // Change the interval as needed
+
+
+        // Initial predictions data for the LSTM output graph
+        var initialPredictions = {{ lstm_predictions | safe }};  // Use Jinja templating to access the variable
+
+        // Plot the initial LSTM output graph
+        updateLSTMGraph(initialPredictions);
+
+        // Function to handle manual buy action
+        function manualBuy() {
+            fetch('/manual-buy')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Manual buy action:', data);
+                // You can handle the response accordingly, e.g., show a success message
+            })
+            .catch(error => {
+                console.error('Error performing manual buy:', error);
+            });
+        }
+
+        // Function to handle manual sell action
+        function manualSell() {
+            fetch('/manual-sell')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Manual sell action:', data);
+                // You can handle the response accordingly, e.g., show a success message
+            })
+            .catch(error => {
+                console.error('Error performing manual sell:', error);
+            });
+        }
+    </script>
+</body>
+</html>
